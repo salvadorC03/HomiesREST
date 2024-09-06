@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!--
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this template
+-->
+<html>
+    <head>
+        <title>Homies - Inicio</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <nav>
+            <header>
+                <h3>Bienvenido a la página de los homies</h3>
+                
+            </header>
+            <ul>
+                <li>
+                    <a href="index.html">Archivos</a>
+                </li>
+                 <li>
+                    <a href="betas.html">Betas</a>
+                </li>
+            </ul>
+        </nav>
+        <main>
+            <h4>Subir nuevo archivo</h4>
+            <form id="homies-form" action="homies" method="POST" enctype="multipart/form-data">
+                <input required type="file" name="file" />
+                <button type="submit">Enviar</button>
+                <span id="upload-progress"></span>
+            </form>
+            <span id="files-list">
+                Cargando archivos...
+            </span>
+        </main>
+    </body>
+    <script>
+        const span = document.getElementById("files-list");
+        const form = document.getElementById("homies-form");
+        
+        form.addEventListener("submit", () => {
+            const progress = document.getElementById("upload-progress");
+            const p = document.createElement("p");
+            
+            p.innerText = "Subiendo archivo...";
+            progress.appendChild(p);
+        });
+
+        const fetchData = async () => {
+            try {
+                const response = await fetch("/getAllFiles");
+                const data = await response.json();
+
+                const items = data.map(fileResponse => {
+                    try {
+                        const li = document.createElement("li");
+                        li.setAttribute("class", "file-item");
+                        const link = document.createElement("a");
+
+                        link.href = fileResponse.downloadURL;
+                        link.download = fileResponse.name;
+
+                        const p = document.createElement("p");
+                        p.innerText = fileResponse.name;
+
+                        link.appendChild(p);
+                        li.appendChild(link);
+
+                        return li;
+                    } catch (error) {
+                        console.error(error.stack);
+                    }
+                });
+                
+                const ul = document.createElement("ul");
+                ul.setAttribute("id", "files-ul");
+                items.forEach(item => ul.append(item));
+                
+                span.innerHTML = "";
+                span.append(ul);
+
+            } catch (error) {
+                console.error(error.stack);
+            }
+        };
+        fetchData();
+    </script>
+</html>
