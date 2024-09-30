@@ -135,6 +135,10 @@ nav ul {
 }
 
 @media (max-width: 400px) {
+    #messages-ul {
+        height: 22rem;
+    }
+    
     main {
         align-items: center;
     }

@@ -10,7 +10,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="styles.css" />
     </head>
-    <body style="height: fit-content;">
+    <body style="height: 99vh; overflow-y: no-content;">
         <nav>
             <header>
                 <h3>Bienvenido a la página de los homies</h3>
@@ -39,12 +39,27 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
             </div>
             <div id="messages-list">
                 <p id="loading-legend">Cargando mensajes...</p>
-                <span id="bottom"></span>
             </div>
         </main>
     </body>
 
     <script>
+        //Handle notifications
+        if ("Notification" in window) {
+            const permission = Notification.permission;
+
+            if (permission !== "granted") {
+                Notification.requestPermission();
+            }
+
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.register("./service-worker.js")
+                        .then(res => console.log("Registered service worker", res))
+                        .catch(error => console.error("Could not register service worker", error));
+            }
+        }
+
+
         const author = document.getElementById("author");
         const storedName = localStorage.getItem("author");
 
@@ -64,10 +79,12 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
         const submitButton = document.getElementById("submit-button");
 
         submitButton.addEventListener("click", () => {
+            author.removeAttribute("disabled");
             const form = document.getElementById("message-form");
             const data = Object.fromEntries(new FormData(form).entries());
 
             if (!data.author || !data.text || data.author.length > 255 || data.text.length > 255) {
+                author.setAttribute("disabled", true);
                 return;
             }
 
@@ -82,8 +99,8 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
             }
         });
 
+        const bottom = document.createElement("span");
         const span = document.getElementById("messages-list");
-        const bottom = document.getElementById("bottom");
         const legend = document.getElementById("loading-legend");
 
         const recordBox = document.getElementById("record-box");
@@ -168,7 +185,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
                 const latestMessage = Array.from(document.querySelectorAll("li")).pop();
 
                 const items = data.filter(message => {
-                    return !latestMessage || message.id > latestMessage.getAttribute("data-id")
+                    return !latestMessage || message.id > latestMessage.getAttribute("data-id");
                 }).map(messageResponse => {
                     try {
                         const li = document.createElement("li");
@@ -192,14 +209,24 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
 
                             li.appendChild(audio);
                         }
-                        return li;
+                        return [messageResponse, li];
                     } catch (error) {
                         console.error(error.stack);
                     }
                 });
 
-                items.forEach(item => ul.append(item));
+                ul.removeChild(bottom);
 
+                items.forEach((item, index) => {
+                    ul.append(item[1]);
+                    if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+                        const notification = new Notification(item[0].author, {body: item[0].type === "text" ? item[0].content : "Audio"});
+                    }
+                });
+                ul.append(bottom);
+
+                if (items.length > 0)
+                    bottom.scrollIntoView({behavior: "smooth"});
                 setTimeout(() => refreshMessages(), 3000);
             } catch (error) {
                 console.error(error.stack);
@@ -248,17 +275,15 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
                 });
                 const ul = document.createElement("ul");
                 ul.setAttribute("id", "messages-ul");
-                items.forEach(item => ul.append(item));
 
                 legend.setAttribute("style", "display: none;");
+
+                items.forEach(item => ul.append(item));
+                ul.append(bottom);
                 span.append(ul);
 
-                const observer = new MutationObserver((mutationList, observer) => {
-                    bottom.scrollIntoView({behavior: "smooth"});
-                });
-
-                observer.observe(ul, {childList: true});
-
+                if (items.length > 0)
+                    bottom.scrollIntoView({behavior: "instant"});
                 setTimeout(() => refreshMessages(), 3000);
             } catch (error) {
                 console.error(error.stack);
