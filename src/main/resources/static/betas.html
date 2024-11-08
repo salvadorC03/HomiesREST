@@ -45,6 +45,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
 
     <script>
         //Handle notifications
+        let registration;
         if ("Notification" in window) {
             const permission = Notification.permission;
 
@@ -53,8 +54,11 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
             }
 
             if ("serviceWorker" in navigator) {
-                navigator.serviceWorker.register("./service-worker.js")
-                        .then(res => console.log("Registered service worker", res))
+                navigator.serviceWorker.register("service-worker.js")
+                        .then(res => {
+                            console.log("Registered service worker", res);
+                            registration = res;
+                        })
                         .catch(error => console.error("Could not register service worker", error));
             }
         }
@@ -191,10 +195,18 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
                         const li = document.createElement("li");
                         li.setAttribute("class", "message-item");
                         const author = document.createElement("h4");
+                        const date = document.createElement("h4");
+
+                        const wrapper = document.createElement("span");
 
                         author.innerText = messageResponse.author;
+                        date.innerText = new Date(messageResponse.date).toLocaleString();
+
+                        wrapper.appendChild(author);
+                        wrapper.appendChild(date);
+
                         li.setAttribute("data-id", messageResponse.id);
-                        li.appendChild(author);
+                        li.appendChild(wrapper);
 
                         if (messageResponse.type === "text") {
                             const text = document.createElement("p");
