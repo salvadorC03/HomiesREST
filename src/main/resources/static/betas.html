@@ -9,6 +9,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="styles.css" />
+        <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
     </head>
     <body style="height: 99vh; overflow-y: no-content;">
         <nav>
@@ -26,7 +27,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
             </ul>
         </nav>
         <main>
-            <form id="message-form" action="sendMessage" method="POST">
+            <form id="message-form">
                 <label for="author">Escribe tu nombre:</label>
                 <input required type="text" id="author" name="author" maxlength="255"/>
                 <button type="button" disabled id="change-name-button">Cambiar nombre</button>
@@ -45,24 +46,13 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
 
     <script>
         //Handle notifications
-        let registration;
         if ("Notification" in window) {
             const permission = Notification.permission;
 
             if (permission !== "granted") {
                 Notification.requestPermission();
             }
-
-            if ("serviceWorker" in navigator) {
-                navigator.serviceWorker.register("service-worker.js")
-                        .then(res => {
-                            console.log("Registered service worker", res);
-                            registration = res;
-                        })
-                        .catch(error => console.error("Could not register service worker", error));
-            }
         }
-
 
         const author = document.getElementById("author");
         const storedName = localStorage.getItem("author");
@@ -93,7 +83,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
             }
 
             localStorage.setItem("author", data.author);
-            form.submit();
+            sendMessage(data.author, data.text);
         });
 
         document.addEventListener("keydown", (event) => {
@@ -150,25 +140,7 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
                         const base64data = reader.result;
                         console.log(base64data);
 
-                        const form = document.createElement("form");
-                        form.setAttribute("action", "sendVoiceNote");
-                        form.setAttribute("method", "POST");
-
-                        const srcInput = document.createElement("input");
-                        srcInput.setAttribute("name", "src");
-                        srcInput.setAttribute("value", base64data);
-
-                        const authorInput = document.createElement("input");
-                        authorInput.setAttribute("name", "author");
-                        authorInput.setAttribute("value", author);
-
-                        form.appendChild(srcInput);
-                        form.appendChild(authorInput);
-
-                        form.setAttribute("style", "display: none;");
-                        document.body.appendChild(form);
-
-                        form.submit();
+                        sendVoiceNote(author, base64Data);
                     };
                 });
 
@@ -179,71 +151,6 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
         };
 
         recordButton.addEventListener("click", (event) => recordAudio(event));
-
-        const refreshMessages = async () => {
-            try {
-                const response = await fetch("/getAllMessages");
-                const data = await response.json();
-
-                const ul = document.getElementById("messages-ul");
-                const latestMessage = Array.from(document.querySelectorAll("li")).pop();
-
-                const items = data.filter(message => {
-                    return !latestMessage || message.id > latestMessage.getAttribute("data-id");
-                }).map(messageResponse => {
-                    try {
-                        const li = document.createElement("li");
-                        li.setAttribute("class", "message-item");
-                        const author = document.createElement("h4");
-                        const date = document.createElement("h4");
-
-                        const wrapper = document.createElement("span");
-
-                        author.innerText = messageResponse.author;
-                        date.innerText = new Date(messageResponse.date).toLocaleString();
-
-                        wrapper.appendChild(author);
-                        wrapper.appendChild(date);
-
-                        li.setAttribute("data-id", messageResponse.id);
-                        li.appendChild(wrapper);
-
-                        if (messageResponse.type === "text") {
-                            const text = document.createElement("p");
-                            text.innerText = messageResponse.content;
-
-                            li.appendChild(text);
-                        } else if (messageResponse.type === "audio") {
-                            const audio = document.createElement("audio");
-
-                            audio.setAttribute("controls", true);
-                            audio.setAttribute("src", messageResponse.content);
-
-                            li.appendChild(audio);
-                        }
-                        return [messageResponse, li];
-                    } catch (error) {
-                        console.error(error.stack);
-                    }
-                });
-
-                ul.removeChild(bottom);
-
-                items.forEach((item, index) => {
-                    ul.append(item[1]);
-                    if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
-                        const notification = new Notification(item[0].author, {body: item[0].type === "text" ? item[0].content : "Audio"});
-                    }
-                });
-                ul.append(bottom);
-
-                if (items.length > 0)
-                    bottom.scrollIntoView({behavior: "smooth"});
-                setTimeout(() => refreshMessages(), 3000);
-            } catch (error) {
-                console.error(error.stack);
-            }
-        };
 
         const fetchData = async () => {
             try {
@@ -296,12 +203,101 @@ Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this temp
 
                 if (items.length > 0)
                     bottom.scrollIntoView({behavior: "instant"});
-                setTimeout(() => refreshMessages(), 3000);
             } catch (error) {
                 console.error(error.stack);
             }
         };
 
         fetchData();
+
+        const stompClient = new StompJs.Client({
+            brokerURL: 'https://localhost:8080/homies-websocket'
+        });
+
+        stompClient.onConnect = (frame) => {
+            setConnected(true);
+            console.log('Connected: ' + frame);
+            stompClient.subscribe('/topic/messages', (message) => {
+                showMessage(JSON.parse(message.body));
+            });
+        };
+
+        stompClient.onWebSocketError = (error) => {
+            console.error('Error with websocket', error);
+        };
+
+        stompClient.onStompError = (frame) => {
+            console.error('Broker reported error: ' + frame.headers['message']);
+            console.error('Additional details: ' + frame.body);
+        };
+
+        function setConnected(connected) {
+            console.log("Socket connection status:", connected);
+        }
+
+        function connect() {
+            stompClient.activate();
+            setConnected(true);
+        }
+
+        function disconnect() {
+            stompClient.deactivate();
+            setConnected(false);
+        }
+
+        function sendMessage(author, text) {
+            stompClient.publish({
+                destination: "/app/sendMessage",
+                body: JSON.stringify({author, text})
+            });
+        }
+
+        function sendVoiceNote(author, src) {
+            stompClient.publish({
+                destination: "/app/sendVoiceNote",
+                body: JSON.stringify({author, src})
+            });
+        }
+
+        function showMessage(messageResponse) {
+            const ul = document.getElementById("messages-ul");
+            ul.removeChild(bottom);
+
+            const li = document.createElement("li");
+            li.setAttribute("class", "message-item");
+            const author = document.createElement("h4");
+            const date = document.createElement("h4");
+
+            const wrapper = document.createElement("span");
+
+            author.innerText = messageResponse.author;
+            date.innerText = new Date(messageResponse.date).toLocaleString();
+
+            wrapper.appendChild(author);
+            wrapper.appendChild(date);
+
+            li.setAttribute("data-id", messageResponse.id);
+            li.appendChild(wrapper);
+
+            if (messageResponse.type === "text") {
+                const text = document.createElement("p");
+                text.innerText = messageResponse.content;
+
+                li.appendChild(text);
+            } else if (messageResponse.type === "audio") {
+                const audio = document.createElement("audio");
+
+                audio.setAttribute("controls", true);
+                audio.setAttribute("src", messageResponse.content);
+
+                li.appendChild(audio);
+            }
+            
+            ul.appendChild(li);
+            ul.appendChild(bottom);
+            
+            bottom.scrollIntoView({behavior: "smooth"});
+        }
+        connect();
     </script>
 </html>

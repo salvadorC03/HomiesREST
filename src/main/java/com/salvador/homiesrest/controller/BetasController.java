@@ -6,42 +6,42 @@ package com.salvador.homiesrest.controller;
 
 import com.salvador.homiesrest.model.HomiesMessage;
 import com.salvador.homiesrest.service.HomiesMessageService;
+import com.salvador.homiesrest.service.MessageRequestBody;
+import com.salvador.homiesrest.service.VoiceNoteRequestBody;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.servlet.view.RedirectView;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  *
  * @author salvador
  */
 @RequiredArgsConstructor
-@Controller
+@RestController
 @CrossOrigin
 public class BetasController {
 
     private final HomiesMessageService betasService;
 
-    @PostMapping("/sendMessage")
-    public RedirectView sendMessage(@RequestParam String text, @RequestParam String author) {
-        betasService.sendMessage(text, author);
-        return new RedirectView("betas.html");
+    @MessageMapping("/sendMessage")
+    @SendTo("/topic/messages")
+    public HomiesMessage sendMessage(@RequestBody MessageRequestBody body) {
+        return betasService.sendMessage(body.getText(), body.getAuthor());
     }
 
-    @PostMapping("/sendVoiceNote")
-    public RedirectView sendVoiceNote(@RequestParam String src, @RequestParam String author) {
-        betasService.sendVoiceNote(src, author);
-        return new RedirectView("betas.html");
+    @MessageMapping("/sendVoiceNote")
+    @SendTo("/topic/messages")
+    public HomiesMessage sendVoiceNote(@RequestBody VoiceNoteRequestBody body) {
+        return betasService.sendVoiceNote(body.getSrc(), body.getAuthor());
     }
 
     @GetMapping("/getAllMessages")
-    @ResponseBody
     public ResponseEntity<List<HomiesMessage>> getAllMessages() {
         return ResponseEntity.ok(betasService.getAllMessages());
     }
